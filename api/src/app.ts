@@ -69,6 +69,8 @@ import debtTokenRoutes from './routes/debtToken.routes';
 import bridgeRoutes from './routes/bridge.routes';
 import complianceRoutes from './routes/v1/compliance';
 import governanceRoutes from './routes/governance';
+import recoveryRoutes from './routes/recovery';
+import rebalancingRoutes from './routes/rebalancing.routes';
 
 import compression from 'compression';
 import { errorHandler } from './middleware/errorHandler';
@@ -279,6 +281,8 @@ app.use('/api/rate-limit', rateLimitRoutes);
 app.use('/api/debt-token', debtTokenRoutes);
 app.use('/api/bridge', bridgeRoutes);
 app.use('/api/governance', legacyGovernanceCompat, governanceRoutes);
+app.use('/api/recovery', legacyGovernanceCompat, recoveryRoutes);
+app.use('/api/rebalancing', rebalancingRoutes);
 
 app.use(errorHandler);
 
