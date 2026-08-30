@@ -175,6 +175,7 @@ impl_from_error!(AnalyticsError, {
     AnalyticsError::InvalidParameter => LendingError::InvalidParameter,
     AnalyticsError::Overflow => LendingError::Overflow,
     AnalyticsError::DataNotFound => LendingError::DataNotFound,
+    AnalyticsError::Unauthorized => LendingError::Unauthorized,
 });
 
 impl_from_error!(BorrowError, {
@@ -267,6 +268,7 @@ impl_from_error!(LiquidationError, {
     LiquidationError::PriceNotAvailable => LendingError::PriceUnavailable,
     LiquidationError::InsufficientLiquidation => LendingError::InvalidState,
     LiquidationError::Reentrancy => LendingError::Reentrancy,
+    LiquidationError::UnprofitableLiquidation => LendingError::InvalidState,
 });
 
 impl_from_error!(RateLimitError, {
@@ -395,6 +397,7 @@ impl From<CrossAssetError> for LendingError {
             CrossAssetError::NotAuthorized => LendingError::Unauthorized,
             CrossAssetError::InvalidCorrelation => LendingError::InvalidParameter,
             CrossAssetError::VolatilityUnavailable => LendingError::InvalidParameter,
+            CrossAssetError::Reentrancy => LendingError::Reentrancy,
         }
     }
 }

@@ -25,6 +25,7 @@
 use soroban_sdk::{contracterror, contracttype, Address, Env, IntoVal};
 
 use crate::deposit::{DepositDataKey, ProtocolAnalytics};
+use crate::storage::set_temp_lending_index;
 
 /// Errors that can occur during interest rate operations
 #[contracterror]
@@ -330,6 +331,10 @@ pub fn calculate_borrow_rate(env: &Env) -> Result<i128, InterestRateError> {
 
     // Apply rate limits
     rate = rate.max(config.rate_floor_bps).min(config.rate_ceiling_bps);
+
+    let contract = env.current_contract_address();
+    crate::rate_guard::record_rate_change(env, rate, &contract, 0)
+        .map_err(|_| InterestRateError::ParameterChangeTooLarge)?;
 
     Ok(rate)
 }

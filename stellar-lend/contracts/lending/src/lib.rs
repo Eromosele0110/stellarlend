@@ -3,6 +3,7 @@ use soroban_sdk::{contract, contractimpl, Address, Bytes, Env, Val, Vec};
 
 mod borrow;
 mod deposit;
+mod reentrancy;
 mod dust;
 mod events;
 mod flash_loan;
@@ -33,6 +34,7 @@ use flash_loan::{
 };
 use pause::{is_paused, set_pause as set_pause_logic, PauseType};
 use token_receiver::receive as receive_logic;
+use reentrancy::ReentrancyGuard;
 
 mod views;
 use views::{
@@ -43,7 +45,10 @@ use views::{
 };
 
 use withdraw::{
+    emergency_withdraw as emergency_withdraw_logic,
+    get_emergency_stats as get_emergency_stats_logic,
     initialize_withdraw_settings as initialize_withdraw_logic,
+    set_emergency_withdraw_limit as set_emergency_withdraw_limit_logic,
     set_withdraw_paused as set_withdraw_paused_logic,
     sweep_deposit_dust as sweep_deposit_dust_logic, withdraw as withdraw_logic, WithdrawError,
 };
@@ -52,9 +57,11 @@ mod insurance;
 mod upgrade;
 
 use insurance::{
-    collect_premium as insurance_collect_premium, evaluate_claim as insurance_evaluate_claim,
-    fund_pool as insurance_fund_pool, get_analytics as insurance_get_analytics,
-    get_claim_by_id as insurance_get_claim, get_coverage_limit as insurance_get_coverage_limit,
+    cancel_claim as insurance_cancel_claim, collect_premium as insurance_collect_premium,
+    evaluate_claim as insurance_evaluate_claim, fund_pool as insurance_fund_pool,
+    get_all_claim_ids as insurance_get_all_claim_ids, get_all_claims as insurance_get_all_claims,
+    get_analytics as insurance_get_analytics, get_claim_by_id as insurance_get_claim,
+    get_coverage_limit as insurance_get_coverage_limit,
     get_premium_rate as insurance_get_premium_rate, initialize as insurance_initialize,
     set_coverage_limit as insurance_set_coverage_limit, submit_claim as insurance_submit_claim,
     InsuranceAnalytics, InsuranceClaim, InsuranceError,
@@ -86,6 +93,8 @@ mod upgrade_test;
 mod views_test;
 #[cfg(test)]
 mod withdraw_test;
+#[cfg(test)]
+mod invariant_prop_test;
 
 #[contract]
 pub struct LendingContract;
@@ -99,6 +108,9 @@ impl LendingContract {
         debt_ceiling: i128,
         min_borrow_amount: i128,
     ) -> Result<(), BorrowError> {
+        let _guard = ReentrancyGuard::new_constructor(&env)
+            .map_err(|_| BorrowError::ReentrancyDetected)?;
+
         if get_borrow_admin(&env).is_some() {
             return Err(BorrowError::Unauthorized);
         }
@@ -369,6 +381,29 @@ impl LendingContract {
         withdraw_logic(&env, user, asset, amount)
     }
 
+    /// Emergency withdraw collateral from the protocol with reduced fees
+    pub fn emergency_withdraw(
+        env: Env,
+        user: Address,
+        asset: Address,
+        amount: i128,
+    ) -> Result<i128, WithdrawError> {
+        emergency_withdraw_logic(&env, user, asset, amount)
+    }
+
+    /// Set emergency withdrawal limit per tx (admin only)
+    pub fn set_emergency_withdraw_limit(
+        env: Env,
+        max_amount: i128,
+    ) -> Result<(), WithdrawError> {
+        set_emergency_withdraw_limit_logic(&env, max_amount)
+    }
+
+    /// Get total emergency analytics stats (total withdrawn, total fees collected)
+    pub fn get_emergency_stats(env: Env) -> (i128, i128) {
+        get_emergency_stats_logic(&env)
+    }
+
     /// Sweep an existing dust-sized deposit balance below the withdraw minimum.
     pub fn sweep_deposit_dust(
         env: Env,
@@ -487,5 +522,24 @@ impl LendingContract {
     /// Get insurance pool analytics.
     pub fn insurance_get_analytics(env: Env) -> InsuranceAnalytics {
         insurance_get_analytics(&env)
+    }
+
+    /// Cancel a pending claim (claimant only).
+    pub fn insurance_cancel_claim(
+        env: Env,
+        claimant: Address,
+        claim_id: u64,
+    ) -> Result<(), InsuranceError> {
+        insurance_cancel_claim(&env, claimant, claim_id)
+    }
+
+    /// Get all claim IDs for history iteration.
+    pub fn insurance_get_all_claim_ids(env: Env) -> Vec<u64> {
+        insurance_get_all_claim_ids(&env)
+    }
+
+    /// Get all claims (full history).
+    pub fn insurance_get_all_claims(env: Env) -> Vec<InsuranceClaim> {
+        insurance_get_all_claims(&env)
     }
 }
