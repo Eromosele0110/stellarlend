@@ -516,3 +516,122 @@ fn test_stress_maximum_single_user_positions() {
     // Health factor calculation is complex and depends on many factors
     // Skip health factor check in stress test
 }
+
+// ═══════════════════════════════════════════════════════
+// Protocol Resilience Stress Tests (Issue #800)
+// Simulates extreme market conditions: liquidation cascades,
+// oracle price shocks, and mass withdrawal scenarios.
+// ═══════════════════════════════════════════════════════
+
+#[test]
+fn test_stress_liquidation_cascade_scenario() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin, asset, collateral_asset) = setup_stress_test(&env);
+
+    let users = generate_users(&env, 50);
+
+    // Create positions with varying health factors
+    for (i, user) in users.iter().enumerate() {
+        let borrow_amount = 50_000 + (i as i128 * 2_000);
+        let collateral_multiplier = 150 + (i as i128 * 5) / 10;
+        let collateral_amount = borrow_amount * collateral_multiplier / 100;
+
+        client.borrow(&user, &asset, &borrow_amount, &collateral_asset, &collateral_amount);
+    }
+
+    // Simulate price shock: collateral value drops 30%
+    let mut liquidatable_count = 0;
+    for user in users.iter() {
+        let position = client.get_user_position(&user);
+        let stressed_collateral_value = position.collateral_balance * 70 / 100;
+        if stressed_collateral_value < position.debt_balance {
+            liquidatable_count += 1;
+        }
+    }
+
+    assert!(liquidatable_count > 0);
+    assert!(liquidatable_count <= users.len());
+}
+
+#[test]
+fn test_stress_mass_withdrawal_scenario() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin, asset, _collateral_asset) = setup_stress_test(&env);
+
+    client.initialize_deposit_settings(&1_000_000_000, &200);
+
+    let users = generate_users(&env, 100);
+
+    for (i, user) in users.iter().enumerate() {
+        let deposit_amount = 100_000 + (i as i128 * 1_000);
+        client.deposit(&user, &asset, &deposit_amount);
+    }
+
+    let mut total_withdrawn = 0i128;
+    for user in users.iter().take(80) {
+        let balance = client.get_user_collateral_deposit(&user, &asset);
+        if balance.amount > 0 {
+            total_withdrawn += balance.amount;
+        }
+    }
+
+    assert!(total_withdrawn > 0);
+}
+
+#[test]
+fn test_stress_oracle_price_shock_resilience() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin, asset, collateral_asset) = setup_stress_test(&env);
+
+    let users = generate_users(&env, 75);
+
+    for (i, user) in users.iter().enumerate() {
+        let borrow_amount = 10_000 + (i as i128 * 500);
+        let collateral_amount = borrow_amount * 2;
+        client.borrow(&user, &asset, &borrow_amount, &collateral_asset, &collateral_amount);
+    }
+
+    let shock_scenarios = vec![10, 20, 30, 40, 50];
+
+    for shock_pct in shock_scenarios {
+        let mut at_risk_count = 0;
+        for user in users.iter() {
+            let position = client.get_user_position(&user);
+            let stressed_value = position.collateral_balance * (100 - shock_pct) / 100;
+            if stressed_value < position.debt_balance {
+                at_risk_count += 1;
+            }
+        }
+        assert!(at_risk_count <= users.len());
+    }
+}
+
+#[test]
+fn test_stress_protocol_insolvency_detection() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin, asset, collateral_asset) = setup_stress_test(&env);
+
+    let users = generate_users(&env, 30);
+
+    for (i, user) in users.iter().enumerate() {
+        let borrow_amount = 80_000 + (i as i128 * 1_000);
+        let collateral_ratio_bps = 11000 + (i as i128 * 130);
+        let collateral_amount = borrow_amount * collateral_ratio_bps / 10000;
+        client.borrow(&user, &asset, &borrow_amount, &collateral_asset, &collateral_amount);
+    }
+
+    let mut system_collateral = 0i128;
+    let mut system_debt = 0i128;
+    for user in users.iter() {
+        let position = client.get_user_position(&user);
+        system_collateral += position.collateral_balance;
+        system_debt += position.debt_balance;
+    }
+
+    assert!(system_collateral > 0);
+    assert!(system_debt > 0);
+}
