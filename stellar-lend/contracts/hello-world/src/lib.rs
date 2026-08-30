@@ -24,6 +24,7 @@ pub mod multisig;
 pub mod oracle;
 pub mod rate_limiter;
 pub mod recovery;
+pub mod rebalancing;
 pub mod reentrancy;
 pub mod repay;
 pub mod reserve;
@@ -217,6 +218,66 @@ impl HelloContract {
     ) -> Result<u64, LendingError> {
         governance::create_emergency_proposal(&env, caller, proposal_type, description)
             .map_err(Into::into)
+    }
+
+    // -------------------------------------------------------------------------
+    // Rebalancing Module — Automated Collateral Optimization (Issue #796)
+    // -------------------------------------------------------------------------
+
+    pub fn rebalancing_configure(
+        env: Env,
+        user: Address,
+        target_health_factor_min: i128,
+        target_health_factor_max: i128,
+        max_gas_cost: i128,
+        auto_rebalance_enabled: bool,
+        min_swap_size: i128,
+        max_slippage_bps: i128,
+        rebalance_cooldown: u64,
+    ) -> Result<(), LendingError> {
+        rebalancing::configure_rebalancing(
+            &env,
+            user,
+            target_health_factor_min,
+            target_health_factor_max,
+            max_gas_cost,
+            auto_rebalance_enabled,
+            min_swap_size,
+            max_slippage_bps,
+            rebalance_cooldown,
+        )
+        .map_err(Into::into)
+    }
+
+    pub fn rebalancing_execute(env: Env, user: Address) -> Result<(), LendingError> {
+        rebalancing::execute_rebalancing(&env, user).map_err(Into::into)
+    }
+
+    pub fn rebalancing_get_config(env: Env, user: Address) -> rebalancing::RebalancingConfig {
+        rebalancing::get_rebalancing_config(&env, &user)
+    }
+
+    pub fn rebalancing_get_history(
+        env: Env,
+        user: Address,
+    ) -> Vec<rebalancing::RebalancingHistoryEntry> {
+        rebalancing::get_rebalancing_history(&env, &user)
+    }
+
+    pub fn rebalancing_set_emergency_stop(
+        env: Env,
+        admin: Address,
+        stopped: bool,
+    ) -> Result<(), LendingError> {
+        rebalancing::set_emergency_stop(&env, admin, stopped).map_err(Into::into)
+    }
+
+    pub fn rebalancing_set_pause(
+        env: Env,
+        admin: Address,
+        paused: bool,
+    ) -> Result<(), LendingError> {
+        rebalancing::set_rebalancing_pause(&env, admin, paused).map_err(Into::into)
     }
 
     pub fn initialize(env: Env, admin: Address) -> Result<(), LendingError> {
