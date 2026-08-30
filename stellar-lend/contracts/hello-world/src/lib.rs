@@ -31,6 +31,7 @@ pub mod risk_management;
 pub mod risk_params;
 pub mod safe_math;
 pub mod storage;
+pub mod timelock;
 pub mod treasury;
 pub mod types;
 pub mod withdraw;
@@ -217,6 +218,113 @@ impl HelloContract {
     ) -> Result<u64, LendingError> {
         governance::create_emergency_proposal(&env, caller, proposal_type, description)
             .map_err(Into::into)
+    }
+
+    // -------------------------------------------------------------------------
+    // Timelock Governance — Multi-Stage Proposal Execution (Issue #797)
+    // -------------------------------------------------------------------------
+
+    pub fn timelock_initialize(
+        env: Env,
+        config: timelock::TimelockConfig,
+    ) -> Result<(), LendingError> {
+        timelock::initialize_timelock(&env, config).map_err(Into::into)
+    }
+
+    pub fn timelock_get_config(env: Env) -> timelock::TimelockConfig {
+        timelock::get_timelock_config(&env)
+    }
+
+    pub fn timelock_queue(
+        env: Env,
+        proposer: Address,
+        proposal_type: types::ProposalType,
+        description: String,
+        custom_delay: Option<u64>,
+    ) -> Result<u64, LendingError> {
+        timelock::queue_timelock_operation(&env, proposer, proposal_type, description, custom_delay)
+            .map_err(Into::into)
+    }
+
+    pub fn timelock_execute(env: Env, executor: Address, operation_id: u64) -> Result<(), LendingError> {
+        timelock::execute_timelock_operation(&env, executor, operation_id).map_err(Into::into)
+    }
+
+    pub fn timelock_cancel(env: Env, caller: Address, operation_id: u64) -> Result<(), LendingError> {
+        timelock::cancel_timelock_operation(&env, caller, operation_id).map_err(Into::into)
+    }
+
+    pub fn timelock_get_operation(env: Env, operation_id: u64) -> Option<timelock::TimelockOperation> {
+        timelock::get_timelock_operation(&env, operation_id)
+    }
+
+    pub fn timelock_get_pending(env: Env) -> Vec<timelock::TimelockOperation> {
+        timelock::get_pending_timelock_operations(&env)
+    }
+
+    pub fn timelock_update_config(
+        env: Env,
+        admin: Address,
+        config: timelock::TimelockConfig,
+    ) -> Result<(), LendingError> {
+        timelock::update_timelock_config(&env, admin, config).map_err(Into::into)
+    }
+
+    pub fn timelock_queue_batch(
+        env: Env,
+        proposer: Address,
+        actions: Vec<types::ProposalType>,
+        description: String,
+        custom_delay: Option<u64>,
+    ) -> Result<u64, LendingError> {
+        timelock::queue_batch_timelock_operation(&env, proposer, actions, description, custom_delay)
+            .map_err(Into::into)
+    }
+
+    pub fn timelock_execute_batch(
+        env: Env,
+        executor: Address,
+        operation_id: u64,
+    ) -> Result<(), LendingError> {
+        timelock::execute_batch_timelock_operation(&env, executor, operation_id).map_err(Into::into)
+    }
+
+    pub fn timelock_get_queue(env: Env) -> Vec<timelock::PriorityQueueEntry> {
+        timelock::get_timelock_queue(&env)
+    }
+
+    pub fn timelock_clean_queue(env: Env) -> u32 {
+        timelock::clean_timelock_queue(&env)
+    }
+
+    pub fn timelock_set_action_delay(
+        env: Env,
+        admin: Address,
+        action_type_id: u32,
+        delay: u64,
+    ) -> Result<(), LendingError> {
+        timelock::set_action_type_delay(&env, admin, action_type_id, delay).map_err(Into::into)
+    }
+
+    pub fn timelock_get_action_delay(env: Env, action_type_id: u32) -> Option<u64> {
+        timelock::get_action_type_delay(&env, action_type_id)
+    }
+
+    pub fn timelock_guardian_approve(
+        env: Env,
+        guardian: Address,
+        operation_id: u64,
+    ) -> Result<(), LendingError> {
+        timelock::guardian_approve_emergency_execution(&env, guardian, operation_id)
+            .map_err(Into::into)
+    }
+
+    pub fn timelock_guardian_execute(
+        env: Env,
+        executor: Address,
+        operation_id: u64,
+    ) -> Result<(), LendingError> {
+        timelock::guardian_emergency_execute(&env, executor, operation_id).map_err(Into::into)
     }
 
     pub fn initialize(env: Env, admin: Address) -> Result<(), LendingError> {
